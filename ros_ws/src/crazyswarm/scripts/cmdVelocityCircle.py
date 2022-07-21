@@ -4,7 +4,7 @@ import numpy as np
 from pycrazyswarm import *
 
 
-Z = 1.0
+Z = 0.5
 sleepRate = 30
 
 
