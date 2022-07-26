@@ -1,105 +1,87 @@
 #!/usr/bin/env python
 
-import asyncio
+#import asyncio
 import numpy as np
 from pycrazyswarm import *
 
 # Set the hovering height of all drones
 Z = 0.5
 # Determines the number of samples taken while flying in circle
-sleepRate = 30
+sleepRate = 360
 # Number of complete orbits "Earth" will complete
 Trials = 2
 # Radius of orbits in meters
 earthOrbitRadius = 1.0
-moonOrbitRadius = 0.25
+moonOrbitRadius = 0.5
 # Orbital periods in seconds
-earthOrbitPeriod = 4.0
-moonOrbitPeriod = 2.0
+earthOrbitPeriod = 120.0
+moonOrbitPeriod = 20.0
 
-kPosition = 1
-
+kPositionE = 1
+kPositionM = 1
 def positionChecker(initialPos, currentPos):
-    return (((initialPos[0] - 0.01) < currentPos[0]) and (currentPos[0] < (initialPos[0] + 0.01))) 
+    return (((initialPos[0] - 0.01) < currentPos[0]) and
+            (currentPos[0] < (initialPos[0] + 0.01))) 
 
-async def goCircle(timeHelper, cf, totalTime, radius, kPosition):
+def goCircle(timeHelper, cfEarth, cfMoon, totalTime, radius, kPosition):
         startTime = timeHelper.time()
-        pos = cf.position()
-        tempPos = cf.position()
+        pos = cfEarth.position()
+        tempPos = cfEarth.position()
         trialCounter = 0
-        startPos = cf.initialPosition + np.array([0, 0, Z])
+        startPos = cfEarth.initialPosition + np.array([0, 0, Z])
         center_circle = startPos - np.array([radius, 0, 0])
-        print(pos)
+        print(center_circle)
         keepGoing = True
         while keepGoing:
-            if (positionChecker(pos, cf.position()) and 
+            earthPosition = cfEarth.position()
+            #Checks the number of cycles has gone through and stops the loop
+            if (positionChecker(pos, earthPosition) and 
                     not positionChecker(pos, tempPos)):
                 print("This works")
                 trialCounter += 1
                 if trialCounter == Trials:
                     keepGoing = False
-            tempPos = cf.position()
+            #keeps the previous position to tell if has returned
+            tempPos = cfEarth.position()
             time = timeHelper.time() - startTime
-            omega = 2 * np.pi / totalTime
-            vx = -radius * omega * np.sin(omega * time)  
-            vy = radius * omega * np.cos(omega * time)
-            desiredPos = center_circle + radius * np.array(
-                [np.cos(omega * time), np.sin(omega * time), 0])
-            errorX = desiredPos - cf.position() 
-            cf.cmdVelocityWorld(np.array([vx, vy, 0] +
-                                         kPosition * errorX),
+            #Calculate angle
+            omegaEarth = 2 * np.pi / totalTime
+            omegaMoon = 2 * np.pi / moonOrbitPeriod
+            #Calculate velocity x
+            vxE = -radius * omegaEarth * np.sin(omegaEarth * time)  
+            vxM = -moonOrbitRadius * omegaMoon * np.sin(omegaMoon * time)
+            #Calculate velocity y
+            vyE = radius * omegaEarth * np.cos(omegaEarth * time)
+            vyM = moonOrbitRadius * omegaMoon * np.cos(omegaEarth * time)
+            #Calclated desired position
+            desiredPosEarth = center_circle + radius * np.array(
+                [np.cos(omegaEarth * time), np.sin(omegaEarth * time), 0])
+            desiredPosMoon = earthPosition + moonOrbitRadius * np.array(
+                    [np.cos(omegaMoon * time), np.sin(omegaMoon * time), 0])
+            #Find the error
+            #print(desiredPosEarth, desiredPosMoon)
+            errorXEarth = desiredPosEarth - cfEarth.position() 
+            errorXMoon = desiredPosMoon - cfMoon.position()
+            #Send desired velocity to drone
+            cfEarth.cmdVelocityWorld(np.array([vxE, vyE, 0] +
+                                         kPosition * errorXEarth),
                                 yawRate=0)
+            cfMoon.cmdVelocityWorld(np.array([vxM, vyM, 0]) + kPosition * errorXMoon, yawRate = 0)
             timeHelper.sleepForRate(sleepRate)
             #print(cf.position())
-            await asyncio.sleep(0.01)
-
-async def goCircle2(timeHelper, cf, totalTime, radius, kPosition):
-        startTime = timeHelper.time()
-        pos = cf.position()
-        tempPos = cf.position()
-        trialCounter = 0
-        startPos = cf.initialPosition + np.array([0, 0, Z])
-        center_circle = startPos - np.array([radius, 0, 0])
-        print(pos)
-        keepGoing = True
-        while keepGoing:
-            if (positionChecker(pos, cf.position()) and 
-                    not positionChecker(pos, tempPos)):
-                print("This works")
-                trialCounter += 1
-                if trialCounter == Trials:
-                    keepGoing = False
-            tempPos = cf.position()
-            time = timeHelper.time() - startTime
-            omega = 2 * np.pi / totalTime
-            vx = -radius * omega * np.sin(omega * time)  
-            vy = radius * omega * np.cos(omega * time)
-            desiredPos = center_circle + radius * np.array(
-                [np.cos(omega * time), np.sin(omega * time), 0])
-            errorX = desiredPos - cf.position() 
-            cf.cmdVelocityWorld(np.array([vx, vy, 0] +
-                                         kPosition * errorX),
-                                yawRate=0)
-            timeHelper.sleepForRate(sleepRate)
-            #print(cf.position())
-
-# if __name__ == "__main__":
-async def main():
+        cfEarth.cmdPosition(pos, yaw=0)
+        timeHelper.sleep(1.0)
+        
+if __name__ == "__main__":
     swarm = Crazyswarm()
     timeHelper = swarm.timeHelper
     allcfs = swarm.allcfs
     allcfs.takeoff(targetHeight=Z, duration=1.0+Z)
     cf1 = allcfs.crazyflies[0]
     cf2 = allcfs.crazyflies[1]
+    cf3 = allcfs.crazyflies[2]
     timeHelper.sleep(2 + Z)
-    f1 = loop.create_task(goCircle(timeHelper, cf1, earthOrbitPeriod, earthOrbitRadius, kPosition))
-    f2 = loop.create_task(goCircle2(timeHelper, cf2, earthOrbitPeriod, earthOrbitRadius, kPosition))
-    await asyncio.wait([f1, f2])
-swarm = Crazyswarm()
-timeHelper = swarm.timeHelper
-allcfs = swarm.allcfs
-loop = asyncio.get_event_loop()
-loop.run_until_complete(main())
-loop.close()
-allcfs.land(targetHeight=0.06, duration=2.0)
-timeHelper.sleep(3.0)
+    goCircle(timeHelper, cf1, cf3, earthOrbitPeriod,
+             earthOrbitRadius, kPositionE)
+    allcfs.land(targetHeight=0.06, duration=2.0)
+    timeHelper.sleep(3.0)
