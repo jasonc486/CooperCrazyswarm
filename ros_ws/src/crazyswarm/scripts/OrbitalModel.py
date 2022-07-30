@@ -14,8 +14,8 @@ Trials = 2
 earthOrbitRadius = 1.0
 moonOrbitRadius = 0.5
 # Orbital periods in seconds
-earthOrbitPeriod = 120.0
-moonOrbitPeriod = 20.0
+earthOrbitPeriod = 20.0
+moonOrbitPeriod = 4.0
 
 kPositionE = 1
 kPositionM = 1
@@ -23,14 +23,23 @@ def positionChecker(initialPos, currentPos):
     return (((initialPos[0] - 0.01) < currentPos[0]) and
             (currentPos[0] < (initialPos[0] + 0.01))) 
 
+def desiredVelocity(radius, omega, time):
+    vx = -radius * omega * np.sin(omega * time)
+    vy = radius * omega * np.cos(omega * time)
+    return np.array([vx, vy, 0])
+
+def desiredPosition(center, radius, omega, time):
+    return center + radius * np.array([np.cos(omega * time), np.sin(omega * time), 0])
+
 def goCircle(timeHelper, cfEarth, cfMoon, totalTime, radius, kPosition):
         startTime = timeHelper.time()
         pos = cfEarth.position()
         tempPos = cfEarth.position()
         trialCounter = 0
-        startPos = cfEarth.initialPosition + np.array([0, 0, Z])
-        center_circle = startPos - np.array([radius, 0, 0])
-        print(center_circle)
+        startPosE = cfEarth.initialPosition + np.array([0, 0, Z])
+        startPosM = cfMoon.initialPosition + np.array([0, 0, Z])
+        center_circle = startPosE - np.array([radius, 0, 0])
+        print(cfEarth.initialPosition)
         keepGoing = True
         while keepGoing:
             earthPosition = cfEarth.position()
@@ -47,29 +56,20 @@ def goCircle(timeHelper, cfEarth, cfMoon, totalTime, radius, kPosition):
             #Calculate angle
             omegaEarth = 2 * np.pi / totalTime
             omegaMoon = 2 * np.pi / moonOrbitPeriod
-            #Calculate velocity x
-            vxE = -radius * omegaEarth * np.sin(omegaEarth * time)  
-            vxM = -moonOrbitRadius * omegaMoon * np.sin(omegaMoon * time)
-            #Calculate velocity y
-            vyE = radius * omegaEarth * np.cos(omegaEarth * time)
-            vyM = moonOrbitRadius * omegaMoon * np.cos(omegaEarth * time)
+            #Calculate desired velocity for Earth
+            desiredVelEarth = desiredVelocity(radius, omegaEarth, time)
             #Calclated desired position
-            desiredPosEarth = center_circle + radius * np.array(
-                [np.cos(omegaEarth * time), np.sin(omegaEarth * time), 0])
-            desiredPosMoon = earthPosition + moonOrbitRadius * np.array(
-                    [np.cos(omegaMoon * time), np.sin(omegaMoon * time), 0])
+            desiredPosEarth = desiredPosition(center_circle, radius, omegaEarth, time)
+            desiredPosMoon = desiredPosition(cfEarth.position(), moonOrbitRadius, omegaMoon, time) 
             #Find the error
-            #print(desiredPosEarth, desiredPosMoon)
             errorXEarth = desiredPosEarth - cfEarth.position() 
-            errorXMoon = desiredPosMoon - cfMoon.position()
             #Send desired velocity to drone
-            cfEarth.cmdVelocityWorld(np.array([vxE, vyE, 0] +
-                                         kPosition * errorXEarth),
-                                yawRate=0)
-            cfMoon.cmdVelocityWorld(np.array([vxM, vyM, 0]) + kPosition * errorXMoon, yawRate = 0)
+            cfEarth.cmdVelocityWorld(((desiredVelEarth) + kPosition * errorXEarth), yawRate=0)
+            #Send desired position to drone
+            cfMoon.cmdPosition(desiredPosMoon, yaw =0)
             timeHelper.sleepForRate(sleepRate)
-            #print(cf.position())
-        cfEarth.cmdPosition(pos, yaw=0)
+        cfEarth.cmdPosition(startPosE, yaw=0)
+        cfMoon.cmdPosition(startPosM, yaw=0)
         timeHelper.sleep(1.0)
         
 if __name__ == "__main__":
