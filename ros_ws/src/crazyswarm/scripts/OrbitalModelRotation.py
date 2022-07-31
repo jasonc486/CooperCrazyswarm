@@ -19,6 +19,9 @@ moonOrbitPeriod = 4.0
 # Rotational periods in seconds
 earthRotationalPeriod = 10.0
 moonRotationalPeriod = 5.0
+# Ellipse axis parameters
+ellipseA = 1.0
+ellipseB = 1.0
 
 kPositionE = 1
 kPositionM = 1
@@ -32,7 +35,7 @@ def desiredVelocity(radius, omega, time):
     return np.array([vx, vy, 0])
 
 def desiredPosition(center, radius, omega, time):
-    return center + radius * np.array([np.cos(omega * time), np.sin(omega * time), 0])
+    return center + radius * np.array([ellipseA * np.cos(omega * time), ellipseB * np.sin(omega * time), 0])
 
 def goCircle(timeHelper, cfEarth, cfMoon, totalTime, radius, kPosition):
         startTime = timeHelper.time()
@@ -59,6 +62,7 @@ def goCircle(timeHelper, cfEarth, cfMoon, totalTime, radius, kPosition):
             tempPos = cfEarth.position()
             time = timeHelper.time() - startTime
             #Calculate the yaw for the Moon's rotation
+            earthSpinPos = 2 * np.pi / earthRotationalPeriod * time
             moonSpinPos = 2 * np.pi / moonRotationalPeriod * time
             #Calculate angle
             omegaEarth = 2 * np.pi / totalTime
@@ -71,8 +75,9 @@ def goCircle(timeHelper, cfEarth, cfMoon, totalTime, radius, kPosition):
             #Find the error
             errorXEarth = desiredPosEarth - cfEarth.position() 
             #Send desired velocity to drone
-            cfEarth.cmdVelocityWorld(((desiredVelEarth) + kPosition * errorXEarth), yawRate = earthSpinRate)
+#            cfEarth.cmdVelocityWorld(((desiredVelEarth) + kPosition * errorXEarth), yawRate = earthSpinRate)
             #Send desired position to drone
+            cfEarth.cmdPosition(desiredPosEarth, yaw = earthSpinPos)
             cfMoon.cmdPosition(desiredPosMoon, yaw = moonSpinPos)
             timeHelper.sleepForRate(sleepRate)
         cfEarth.cmdPosition(startPosE, yaw=0)
