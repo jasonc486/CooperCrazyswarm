@@ -17,7 +17,7 @@ earthOrbitPeriod = 20.0
 moonOrbitPeriod = 4.0
 # Rotational periods in seconds
 earthRotationalPeriod = 10.0
-moonRotationalPeriod = 5.0
+moonRotationalPeriod = 10.0
 sunRotationalPeriod = 40.0
 # Ellipse axis parameters
 ellipseA = 1.0
@@ -41,18 +41,10 @@ def goCircle(timeHelper, cfEarth, cfSun, cfMoon, totalTime, radius, kPosition):
         startPosM = cfMoon.initialPosition + np.array([0, 0, Z])
         startPosS = cfSun.initialPosition + np.array([0, 0, Z])
         center_circle = startPosE - np.array([radius, 0, 0])
-        cfSun.goTo(startPosS, yaw = 0, duration = 1.0)
         #print(cfEarth.initialPosition)
         keepGoing = True
         while keepGoing:
             earthPosition = cfEarth.position()
-            #Checks the number of cycles has gone through and stops the loop
-            if (positionChecker(pos, earthPosition) and 
-                    not positionChecker(pos, tempPos)):
-                #print("This works")
-                trialCounter += 1
-                if trialCounter == Trials:
-                    keepGoing = False
             #Calculate yaw rate for Earth rotation
             earthSpinRate = 2 * np.pi / earthRotationalPeriod
             #keeps the previous position to tell if has returned
@@ -65,13 +57,18 @@ def goCircle(timeHelper, cfEarth, cfSun, cfMoon, totalTime, radius, kPosition):
             #Calculate angle
             omegaEarth = 2 * np.pi / totalTime
             omegaMoon = 2 * np.pi / moonOrbitPeriod
+            #Checks when to stop
+            if(omegaEarth * time >= Trials * 2 * np.pi):
+                keepGoing = False
+                break
             #Calclated desired position
             desiredPosEarth = desiredPosition(center_circle, radius, omegaEarth, time)
-            desiredPosMoon = desiredPosition(cfEarth.position(), moonOrbitRadius, omegaMoon, time) 
+            desiredPosMoon = (desiredPosEarth, moonOrbitRadius, omegaMoon, time) 
             #Send desired position to drone
-            cfEarth.cmdPosition(desiredPosEarth, yaw = earthSpinPos)
-            cfMoon.cmdPosition(desiredPosMoon, yaw = moonSpinPos)
-            cfSun.cmdPosition(startPosS, yaw = sunSpinPos)
+            cfEarth.cmdPosition(desiredPosEarth, yaw = 0)
+            cfMoon.cmdPosition(desiredPosMoon, yaw = 0)
+            cfSun.cmdPosition(startPosS, yaw = 0)
+#            print(sunSpinPos, earthSpinPos, moonSpinPos) 
             #print(cfSun.yaw(), cfEarth.yaw(), cfMoon.yaw())
             timeHelper.sleepForRate(sleepRate)
         #Return to original positions
@@ -87,7 +84,7 @@ if __name__ == "__main__":
     cf1 = allcfs.crazyflies[0]
     cf2 = allcfs.crazyflies[1]
     cf3 = allcfs.crazyflies[2]
-    timeHelper.sleep(2 + Z)
+    timeHelper.sleep(3 + Z)
     goCircle(timeHelper, cf1, cf2, cf3, earthOrbitPeriod,
              earthOrbitRadius, kPositionE)
     allcfs.land(targetHeight=0.06, duration=2.0)
